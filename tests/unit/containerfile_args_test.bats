@@ -45,15 +45,6 @@ setup() {
     }
 }
 
-# Known dead ARGs that cannot be removed here without also editing a consumer
-# outside this change set. Tracked in issue #559; this list must only shrink.
-#
-#   GNOME_VERSION - passed by Justfile:130 but read by no build script; the
-#                   GNOME stream is hardcoded in the COPR URL at
-#                   build_scripts/overrides/base/10-packages-image-base.sh:24.
-#                   Removing the ARG alone would leave the Justfile passing an
-#                   undeclared build-arg, so both sides must move together.
-KNOWN_DEAD_ARGS="GNOME_VERSION"
 
 @test "Containerfile declares at least one ARG (guard is not vacuous)" {
     run bash -c "$(declare -f arg_names); CONTAINERFILE='${CONTAINERFILE}'; arg_names | wc -l"
@@ -73,9 +64,6 @@ KNOWN_DEAD_ARGS="GNOME_VERSION"
         if grep -qxF "${name}" <<<"${payload}"; then
             continue
         fi
-        if grep -qw "${name}" <<<"${KNOWN_DEAD_ARGS}"; then
-            continue
-        fi
         dead+=" ${name}"
     done
 
@@ -87,27 +75,6 @@ KNOWN_DEAD_ARGS="GNOME_VERSION"
     fi
 }
 
-@test "the known-dead ARG allowlist is not stale" {
-    # If an allowlisted ARG gains a consumer or is deleted, it must leave the
-    # list, otherwise the list silently grants a future dead ARG a free pass.
-    local expansions payload stale=""
-    expansions="$(containerfile_expansions)"
-    payload="$(payload_references)"
-
-    for name in ${KNOWN_DEAD_ARGS}; do
-        if ! grep -qxF "${name}" <<<"$(arg_names)"; then
-            stale+=" ${name}(no longer declared)"
-        elif grep -qxF "${name}" <<<"${expansions}" ||
-            grep -qxF "${name}" <<<"${payload}"; then
-            stale+=" ${name}(now consumed)"
-        fi
-    done
-
-    if [ -n "${stale}" ]; then
-        echo "Remove from KNOWN_DEAD_ARGS:${stale}" >&2
-        return 1
-    fi
-}
 
 @test "BASE_IMAGE_SHA is not reintroduced without a consumer" {
     # It existed as a frozen sha256 literal that nothing read, which made the
